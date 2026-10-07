@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IDataXMLCoder version="1.0">
+    <record javaclass="com.wm.data.ISMemDataImpl">
+        <value name="apiUrl">https://catalog.zillaforge.com/products</value>
+        <value name="apiKey">test-api-key-001</value>
+        <value name="budgetThreshold">5000</value>
+        <value name="premiumThreshold">1000</value>
+    </record>
+</IDataXMLCoder>

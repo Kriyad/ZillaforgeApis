@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<webMethodsTestSuite description="productsbylist TestSuite - Input Validation &amp; API Failure Scenarios" name="productsbylist_TestSuite">
+
+    <webMethodsTestCase description="Input Validation: budgetThreshold is non-numeric (cheap) -> EXIT FAILURE" name="error_budget_not_number">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_budget_not_number-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_budget_not_number-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="Input Validation: premiumThreshold is non-numeric (expensive) -> EXIT FAILURE" name="error_premium_not_number">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_premium_not_number-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_premium_not_number-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="Input Validation: budgetThreshold (5000) > premiumThreshold (1000) -> EXIT FAILURE" name="error_budget_gt_premium">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_budget_gt_premium-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_budget_gt_premium-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="Input Validation: budgetThreshold (500) == premiumThreshold (500) -> EXIT FAILURE [known bug]" name="error_budget_eq_premium">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_budget_eq_premium-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_budget_eq_premium-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="API Failure: catalog URL unreachable, TRY/CATCH fires -> EXIT FAILURE" name="error_api_failure">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_api_failure-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_api_failure-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="API Failure: catalog API returns HTTP 401 Unauthorized -> EXIT FAILURE" name="error_non200_status_401">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_non200_status_401-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_non200_status_401-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="API Failure: catalog API returns HTTP 503 Service Unavailable -> EXIT FAILURE" name="error_non200_status_503">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_non200_status_503-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_non200_status_503-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+    <webMethodsTestCase description="API Failure: blank apiKey sends empty x-Gateway-APIKey header, API returns 401 -> EXIT FAILURE" name="error_blank_apikey">
+        <service folder="getCategorisedProducts" name="productsbylist">
+            <input>
+                <file filename="error_blank_apikey-input.xml"/>
+            </input>
+            <expected>
+                <file filename="error_blank_apikey-result.xml"/>
+            </expected>
+        </service>
+    </webMethodsTestCase>
+
+</webMethodsTestSuite>

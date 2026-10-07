@@ -1,0 +1,458 @@
+interface getCategorisedProducts;
+
+service productsbylist (
+    input {
+        String apiUrl;
+        String apiKey;
+        String budgetThreshold;
+        String premiumThreshold;
+    }
+    output {
+        recordList products;
+    }
+)
+properties {
+    favorite: false;
+    deprecated: false;
+    visible: private;
+    reuse: private;
+    stateless: true;
+    cacheResults: false;
+    cacheExpire: 15;
+    prefetch: false;
+    prefetchActivation: 1;
+    pipelineDebug: None;
+    allowedHttpMethods: [TRACE, HEAD, DELETE, POST, GET, OPTIONS, PUT, PATCH];
+    maxRetryAttempts: 0;
+    retryInterval: 0;
+    enableAuditing: never;
+    logOn: Error only;
+    includePipeline: never;
+    circuitBreakerEnabled: false;
+    failureEvent: Exception only;
+    timeoutPeriod: 60;
+    cancelThreadOnTimeout: false;
+    failureThreshold: 5;
+    failurePeriod: 60;
+    circuitOpenAction: Throw exception;
+    circuitResetPeriod: 300;
+    concurrencyEnabled: false;
+    maxConcurrentRequests: 20;
+    validateInput: false;
+    validateOutput: false;
+}
+{
+    MAP {
+        comment: "Initialise headers document with empty x-Gateway-APIKey"
+        mapTarget {
+            record headers {
+                String x-Gateway-APIKey;
+            };
+        }
+        set `headers` = {`x-Gateway-APIKey`:""};
+    }
+
+    MAP {
+        comment: "Set API key header value"
+        mapSource {
+            String apiKey;
+        }
+        mapTarget {
+            record headers {
+                String x-Gateway-APIKey;
+            };
+        }
+        copy apiKey -> headers/x-Gateway-APIKey;
+    }
+
+    TRY {
+        INVOKE pub.client:http {
+            input {
+                mapSource {
+                    String apiUrl;
+                    record headers;
+                }
+                mapTarget {
+                    String url;
+                    String method;
+                    record headers;
+                }
+                copy apiUrl -> url;
+                set method = "GET";
+                set loadAs = "bytes";
+                set timeout = "30000";
+                copy headers -> headers;
+            }
+            output {
+                mapSource[httpOutput] {
+                    String encodedURL;
+                    record header {
+                        record lines;
+                        String status;
+                        String statusMessage;
+                    };
+                    record body;
+                }
+                copy header -> header;
+                copy body -> body;
+                copy encodedURL -> encodedURL;
+            }
+        }
+
+        MAP {
+            comment: "Extract HTTP response status"
+            copy header/status -> httpStatus;
+        }
+
+        IF(%httpStatus%!="200") {
+            EXIT {
+                signal: "FAILURE"
+                failureMessage: "Catalog API returned non-200 status: %httpStatus%"
+                exitFrom: "$flow"
+            }
+        }
+
+        INVOKE pub.string:bytesToString {
+            input {
+                mapTarget[bytesToStringInput] {
+                    Object bytes;
+                    String encoding;
+                    String ignoreBOMChars;
+                }
+                copy body/bytes -> bytes;
+                set encoding = "UTF-8";
+            }
+        }
+
+        INVOKE pub.json:jsonStringToDocument {
+            input {
+                mapTarget[jsonStringToDocumentInput] {
+                    String jsonString;
+                    String jsonDocumentTypeName;
+                    String strict;
+                    String decodeRealAsDouble;
+                    String decodeIntegerAsLong;
+                    String decodeRealAsString;
+                    String decodeNullRootAsEmpty;
+                    String unescapeSpecialChars;
+                }
+                copy string -> jsonString;
+            }
+            output {
+                copy document -> responseDoc;
+            }
+        }
+
+        MAP {
+            comment: "Extract product array from responseDoc into flat items variable"
+            mapSource {
+                record responseDoc {
+                    recordList `output` {
+                        String productType;
+                        String currencyName;
+                        String uom;
+                        String brand;
+                        String listPrice;
+                        String id;
+                        String productName;
+                        String productDescription;
+                    };
+                };
+            }
+            mapTarget {
+                recordList items {
+                    String productType;
+                    String currencyName;
+                    String uom;
+                    String brand;
+                    String listPrice;
+                    String id;
+                    String productName;
+                    String productDescription;
+                };
+            }
+            copy responseDoc/`output` -> items;
+        }
+    }
+    CATCH {
+        MAP {
+            copy $error -> errorMessage;
+        }
+        EXIT {
+            signal: "FAILURE"
+            failureMessage: "Catalog API call failed: %errorMessage%"
+            exitFrom: "$flow"
+        }
+    }
+
+    INVOKE pub.string:isNumber {
+        comment: "Validate budgetThreshold is numeric"
+        input {
+            mapSource {
+                String budgetThreshold;
+            }
+            mapTarget[isNumberBudgetInput] {
+                String inString;
+            }
+            copy budgetThreshold -> inString;
+        }
+        output {
+            copy isNumber -> isBudgetNumber;
+        }
+    }
+
+    IF(%isBudgetNumber%!="true") {
+        EXIT {
+            signal: "FAILURE"
+            failureMessage: "budgetThreshold is not a valid number"
+            exitFrom: "$flow"
+        }
+    }
+
+    INVOKE pub.string:isNumber {
+        comment: "Validate premiumThreshold is numeric"
+        input {
+            mapSource {
+                String premiumThreshold;
+            }
+            mapTarget[isNumberPremiumInput] {
+                String inString;
+            }
+            copy premiumThreshold -> inString;
+        }
+        output {
+            copy isNumber -> isPremiumNumber;
+        }
+    }
+
+    IF(%isPremiumNumber%!="true") {
+        EXIT {
+            signal: "FAILURE"
+            failureMessage: "premiumThreshold is not a valid number"
+            exitFrom: "$flow"
+        }
+    }
+
+    INVOKE pub.math:subtractFloats {
+        comment: "Validate budgetThreshold < premiumThreshold: premium minus budget must be positive"
+        input {
+            mapSource {
+                String premiumThreshold;
+                String budgetThreshold;
+            }
+            mapTarget[validateThresholdsInput] {
+                String num1;
+                String num2;
+                String precision;
+            }
+            copy premiumThreshold -> num1;
+            copy budgetThreshold -> num2;
+            set precision = "2";
+        }
+        output {
+            copy value -> thresholdDiff;
+        }
+    }
+
+    INVOKE pub.string:indexOf {
+        comment: "Check sign of thresholdDiff: index 0 means negative (invalid: budget >= premium)"
+        input {
+            mapSource {
+                String thresholdDiff;
+            }
+            mapTarget[indexOfThresholdInput] {
+                String inString;
+                String subString;
+                String fromIndex;
+            }
+            copy thresholdDiff -> inString;
+            set subString = "-";
+            set fromIndex = "0";
+        }
+        output {
+            copy value -> thresholdDiffSign;
+        }
+    }
+
+    IF(%thresholdDiffSign%=="0") {
+        EXIT {
+            signal: "FAILURE"
+            failureMessage: "budgetThreshold must be less than premiumThreshold"
+            exitFrom: "$flow"
+        }
+    }
+
+    LOOP {
+        inputArray: "/items"
+
+        MAP {
+            comment: "Copy current loop item into enrichedProduct"
+            mapSource {
+                record items;
+            }
+            mapTarget {
+                record enrichedProduct;
+            }
+            copy items -> enrichedProduct;
+        }
+
+        INVOKE pub.string:isNumber {
+            comment: "Validate listPrice is numeric"
+            input {
+                mapSource {
+                    record items {
+                        String listPrice;
+                    };
+                }
+                mapTarget[isNumberPriceInput] {
+                    String inString;
+                }
+                copy items/listPrice -> inString;
+            }
+            output {
+                copy isNumber -> isPriceNumber;
+            }
+        }
+
+        SEQUENCE {
+            comment: "Only categorise product when listPrice is a valid number"
+
+            IF(%isPriceNumber%!="true") {
+                MAP {
+                    comment: "listPrice invalid — mark as uncategorised and skip"
+                    set enrichedProduct/priceCategory = "Uncategorised";
+                }
+            }
+
+            IF(%isPriceNumber%=="true") {
+
+                INVOKE pub.math:subtractFloats {
+                    comment: "listPrice minus budgetThreshold"
+                    input {
+                        mapSource {
+                            record items {
+                                String listPrice;
+                            };
+                            String budgetThreshold;
+                        }
+                        mapTarget[subtractBudgetInput] {
+                            String num1;
+                            String num2;
+                            String precision;
+                        }
+                        copy items/listPrice -> num1;
+                        copy budgetThreshold -> num2;
+                        set precision = "2";
+                    }
+                    output {
+                        copy value -> diffFromBudget;
+                    }
+                }
+
+                INVOKE pub.string:indexOf {
+                    comment: "Sign of diffFromBudget: '0' = negative (below budget), '-1' = zero or positive"
+                    input {
+                        mapSource {
+                            String diffFromBudget;
+                        }
+                        mapTarget[indexOfBudgetInput] {
+                            String inString;
+                            String subString;
+                            String fromIndex;
+                        }
+                        copy diffFromBudget -> inString;
+                        set subString = "-";
+                        set fromIndex = "0";
+                    }
+                    output {
+                        copy value -> budgetSign;
+                    }
+                }
+
+                INVOKE pub.math:subtractFloats {
+                    comment: "listPrice minus premiumThreshold"
+                    input {
+                        mapSource {
+                            record items {
+                                String listPrice;
+                            };
+                            String premiumThreshold;
+                        }
+                        mapTarget[subtractPremiumInput] {
+                            String num1;
+                            String num2;
+                            String precision;
+                        }
+                        copy items/listPrice -> num1;
+                        copy premiumThreshold -> num2;
+                        set precision = "2";
+                    }
+                    output {
+                        copy value -> diffFromPremium;
+                    }
+                }
+
+                INVOKE pub.string:indexOf {
+                    comment: "Sign of diffFromPremium: '0' = negative (below premium), '-1' = zero or positive (at or above)"
+                    input {
+                        mapSource {
+                            String diffFromPremium;
+                        }
+                        mapTarget[indexOfPremiumInput] {
+                            String inString;
+                            String subString;
+                            String fromIndex;
+                        }
+                        copy diffFromPremium -> inString;
+                        set subString = "-";
+                        set fromIndex = "0";
+                    }
+                    output {
+                        copy value -> premiumSign;
+                    }
+                }
+
+                BRANCH {
+                    evaluateLabels: true
+                    SEQUENCE {
+                        label: "%budgetSign%==0"
+                        MAP {
+                            comment: "listPrice < budgetThreshold → Budget"
+                            set enrichedProduct/priceCategory = "Budget";
+                        }
+                    }
+                    SEQUENCE {
+                        label: "%premiumSign%==-1"
+                        MAP {
+                            comment: "listPrice >= premiumThreshold → Premium"
+                            set enrichedProduct/priceCategory = "Premium";
+                        }
+                    }
+                    SEQUENCE {
+                        label: "$default"
+                        MAP {
+                            comment: "listPrice >= budgetThreshold AND < premiumThreshold → Standard"
+                            set enrichedProduct/priceCategory = "Standard";
+                        }
+                    }
+                }
+            }
+        }
+
+        INVOKE pub.list:appendToDocumentList {
+            comment: "Append enriched product to products list"
+            input {
+                mapTarget[appendToDocumentListInput] {
+                    Object toList;
+                    Object fromList;
+                    Object fromItem;
+                }
+                copy products -> toList;
+                copy enrichedProduct -> fromItem;
+            }
+            output {
+                copy toList -> products;
+            }
+        }
+    }
+}

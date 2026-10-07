@@ -1,0 +1,436 @@
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>productsByList Flow Service Documentation</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+            line-height: 1.6;
+            color: #1f2328;
+            background: #ffffff;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        h1 { font-size: 1.75rem; font-weight: 600; margin: 0 0 8px; }
+        h2 { font-size: 1.25rem; font-weight: 600; margin: 32px 0 12px; padding-top: 8px; border-top: 1px solid #e5e7eb; }
+        h3 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: #3b82d4; }
+        p { margin: 8px 0; }
+        code { background: #f7f8fa; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: "SF Mono", "Fira Code", monospace; }
+        pre { background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+        pre code { background: none; padding: 0; font-size: inherit; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+        th, td { border: 1px solid #e5e7eb; padding: 10px 12px; text-align: left; }
+        th { background: #f7f8fa; font-weight: 600; }
+        tr:nth-child(even) td { background: #fafbfc; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .badge-info { background: #e8f0fe; color: #1a73e8; }
+        .badge-success { background: #e6f4ea; color: #1e7e34; }
+        .badge-warning { background: #fef3c7; color: #b45309; }
+        .badge-danger { background: #fce8e6; color: #c5221f; }
+        .section { margin-bottom: 24px; }
+        .flow-step { background: #f7f8fa; border-left: 3px solid #3b82d4; padding: 12px 16px; margin: 8px 0; border-radius: 0 6px 6px 0; }
+        .flow-step .step-title { font-weight: 600; margin-bottom: 4px; }
+        .flow-step .step-desc { color: #57606a; font-size: 0.9rem; }
+        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; color: #57606a; font-size: 0.85rem; }
+        ul { padding-left: 20px; }
+        li { margin: 4px 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>productsByList Flow Service</h1>
+        <p><span class="badge badge-info">Interface</span> <code>getCategorisedProducts</code>   <span class="badge badge-success">Stateless</span>   <span class="badge badge-warning">Private</span></p>
+    </header>
+
+    <section class="section">
+        <h2>Purpose</h2>
+        <p>This flow service retrieves a product catalog from an external REST API, validates pricing thresholds, and categorizes each product into one of three price tiers (<strong>Budget</strong>, <strong>Standard</strong>, <strong>Premium</strong>) based on its list price relative to configurable threshold values.</p>
+        <p>It is designed to be invoked as part of a product catalog integration where downstream consumers need products pre-segmented by price category for display, filtering, or business logic.</p>
+    </section>
+
+    <section class="section">
+        <h2>Business Rules</h2>
+        <div class="flow-step">
+            <div class="step-title">Threshold Validation (Pre-processing)</div>
+            <div class="step-desc">Before processing products, the service validates that both <code>budgetThreshold</code> and <code>premiumThreshold</code> are valid numbers and that <code>budgetThreshold &lt; premiumThreshold</code>. If validation fails, the flow exits with a <code>FAILURE</code> signal.</div>
+        </div>
+
+        <div class="flow-step">
+            <div class="step-title">Product Categorization Logic</div>
+            <div class="step-desc">For each product with a valid numeric <code>listPrice</code>:</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Condition</th>
+                    <th>Mathematical Expression</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Budget</strong></td>
+                    <td>Price is <em>below</em> budget threshold</td>
+                    <td><code>listPrice &lt; budgetThreshold</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Standard</strong></td>
+                    <td>Price is <em>at or above</em> budget threshold but <em>below</em> premium threshold</td>
+                    <td><code>budgetThreshold ≤ listPrice &lt; premiumThreshold</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Premium</strong></td>
+                    <td>Price is <em>at or above</em> premium threshold</td>
+                    <td><code>listPrice ≥ premiumThreshold</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Uncategorised</strong></td>
+                    <td>Price is not a valid number</td>
+                    <td><code>!isNumber(listPrice)</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="flow-step">
+            <div class="step-title">HTTP Error Handling</div>
+            <div class="step-desc">If the catalog API returns any HTTP status other than <code>200</code>, the flow exits with <code>FAILURE</code> and includes the status code in the error message.</div>
+        </div>
+
+        <div class="flow-step">
+            <div class="step-title">Exception Handling</div>
+            <div class="step-desc">Any exception during the HTTP call, JSON parsing, or threshold validation is caught and results in a <code>FAILURE</code> exit with the error message.</div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Inputs</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>apiUrl</code></td>
+                    <td>String</td>
+                    <td>Yes</td>
+                    <td>Full URL of the catalog REST API endpoint (e.g., <code>https://api.example.com/v1/products</code>).</td>
+                </tr>
+                <tr>
+                    <td><code>apiKey</code></td>
+                    <td>String</td>
+                    <td>Yes</td>
+                    <td>API key sent as <code>x-Gateway-APIKey</code> header for authentication.</td>
+                </tr>
+                <tr>
+                    <td><code>budgetThreshold</code></td>
+                    <td>String</td>
+                    <td>Yes</td>
+                    <td>Lower price boundary. Must be a valid number and <strong>less than</strong> <code>premiumThreshold</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>premiumThreshold</code></td>
+                    <td>String</td>
+                    <td>Yes</td>
+                    <td>Upper price boundary. Must be a valid number and <strong>greater than</strong> <code>budgetThreshold</code>.</td>
+                </tr>
+            </tbody>
+        </table>
+        <p><strong>Note:</strong> Thresholds are passed as Strings but validated as numeric values using <code>pub.string:isNumber</code>.</p>
+    </section>
+
+    <section class="section">
+        <h2>Outputs</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>products</code></td>
+                    <td>recordList</td>
+                    <td>List of enriched product records, each containing all original fields plus a <code>priceCategory</code> field with value: <code>Budget</code>, <code>Standard</code>, <code>Premium</code>, or <code>Uncategorised</code>.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Product Record Structure</h3>
+        <pre><code>record {
+    String productType;
+    String currencyName;
+    String uom;
+    String brand;
+    String listPrice;
+    String id;
+    String productName;
+    String productDescription;
+    String priceCategory;  // Added by this flow
+}</code></pre>
+    </section>
+
+    <section class="section">
+        <h2>Service Properties</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Property</th>
+                    <th>Value</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>stateless</td><td>true</td><td>No session state maintained</td></tr>
+                <tr><td>visible</td><td>private</td><td>Not exposed as public API</td></tr>
+                <tr><td>reuse</td><td>private</td><td>Private reuse scope</td></tr>
+                <tr><td>timeoutPeriod</td><td>60 seconds</td><td>Flow execution timeout</td></tr>
+                <tr><td>logOn</td><td>Error only</td><td>Pipeline logged only on errors</td></tr>
+                <tr><td>validateInput</td><td>false</td><td>Input validation handled in flow logic</td></tr>
+                <tr><td>validateOutput</td><td>false</td><td>No output schema validation</td></tr>
+                <tr><td>circuitBreakerEnabled</td><td>false</td><td>No circuit breaker configured</td></tr>
+                <tr><td>allowedHttpMethods</td><td>All methods</td><td>TRACE, HEAD, DELETE, POST, GET, OPTIONS, PUT, PATCH</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Processing Flow</h2>
+        <ol>
+            <li><strong>Initialize Headers</strong> — Create empty <code>headers</code> record with <code>x-Gateway-APIKey</code> field.</li>
+            <li><strong>Set API Key</strong> — Copy input <code>apiKey</code> into <code>headers/x-Gateway-APIKey</code>.</li>
+            <li><strong>Call Catalog API</strong> — <code>pub.client:http</code> GET request to <code>apiUrl</code> with headers, 30s timeout, response loaded as bytes.</li>
+            <li><strong>Check HTTP Status</strong> — If status ≠ 200, exit with <code>FAILURE</code>.</li>
+            <li><strong>Parse Response</strong> — Convert bytes to UTF-8 string (<code>pub.string:bytesToString</code>), then parse JSON to document (<code>pub.json:jsonStringToDocument</code>).</li>
+            <li><strong>Extract Products</strong> — Map <code>responseDoc/output</code> array to <code>items</code> list.</li>
+            <li><strong>Validate Thresholds</strong> —
+                <ul>
+                    <li>Check both thresholds are numeric (<code>pub.string:isNumber</code>)</li>
+                    <li>Verify <code>budgetThreshold &lt; premiumThreshold</code> via <code>pub.math:subtractFloats</code> + <code>pub.string:indexOf</code> for sign detection</li>
+                </ul>
+            </li>
+            <li><strong>Loop Through Products</strong> — For each item in <code>items</code>:
+                <ul>
+                    <li>Copy item to <code>enrichedProduct</code></li>
+                    <li>Validate <code>listPrice</code> is numeric</li>
+                    <li>If invalid → set <code>priceCategory = "Uncategorised"</code></li>
+                    <li>If valid → compute <code>diffFromBudget</code> and <code>diffFromPremium</code>, determine signs via <code>indexOf</code> for "-" character</li>
+                    <li>Branch logic:
+                        <ul>
+                            <li><code>budgetSign == 0</code> (negative) → <strong>Budget</strong></li>
+                            <li><code>premiumSign == -1</code> (zero or positive) → <strong>Premium</strong></li>
+                            <li>Default → <strong>Standard</strong></li>
+                        </ul>
+                    </li>
+                    <li>Append <code>enrichedProduct</code> to output <code>products</code> list</li>
+                </ul>
+            </li>
+        </ol>
+    </section>
+
+    <section class="section">
+        <h2>Test Scenarios</h2>
+
+        <h3>Happy Path Tests</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Scenario</th>
+                    <th>Input</th>
+                    <th>Expected Output</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>All products categorised correctly</td>
+                    <td><code>apiUrl</code>: valid endpoint<br /><code>apiKey</code>: valid key<br /><code>budgetThreshold</code>: "100"<br /><code>premiumThreshold</code>: "500"<br />Products: $50, $200, $600</td>
+                    <td>3 products with categories: Budget, Standard, Premium</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>Product exactly at budget threshold</td>
+                    <td>Same as above, product with <code>listPrice</code> = "100"</td>
+                    <td>Category = Standard (≥ budget, &lt; premium)</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Product exactly at premium threshold</td>
+                    <td>Same as above, product with <code>listPrice</code> = "500"</td>
+                    <td>Category = Premium (≥ premium)</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>Empty product catalog</td>
+                    <td>API returns empty <code>output</code> array</td>
+                    <td>Empty <code>products</code> list (no error)</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>Mixed valid/invalid prices</td>
+                    <td>Products with <code>listPrice</code>: "100", "abc", "300"</td>
+                    <td>"100"→Standard, "abc"→Uncategorised, "300"→Standard</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Error Handling Tests</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Scenario</th>
+                    <th>Input</th>
+                    <th>Expected Behavior</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>6</td>
+                    <td>API returns 401 Unauthorized</td>
+                    <td>Invalid <code>apiKey</code></td>
+                    <td>FAILURE: "Catalog API returned non-200 status: 401"</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td>API returns 500 Internal Server Error</td>
+                    <td>Backend failure</td>
+                    <td>FAILURE: "Catalog API returned non-200 status: 500"</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td>API returns 404 Not Found</td>
+                    <td>Wrong <code>apiUrl</code></td>
+                    <td>FAILURE: "Catalog API returned non-200 status: 404"</td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td>Network timeout</td>
+                    <td>API unresponsive &gt; 30s</td>
+                    <td>FAILURE: "Catalog API call failed: [timeout error]"</td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td>Invalid JSON response</td>
+                    <td>API returns malformed JSON</td>
+                    <td>FAILURE: "Catalog API call failed: [parse error]"</td>
+                </tr>
+                <tr>
+                    <td>11</td>
+                    <td><code>budgetThreshold</code> not numeric</td>
+                    <td><code>budgetThreshold</code>: "abc"</td>
+                    <td>FAILURE: "budgetThreshold is not a valid number"</td>
+                </tr>
+                <tr>
+                    <td>12</td>
+                    <td><code>premiumThreshold</code> not numeric</td>
+                    <td><code>premiumThreshold</code>: "xyz"</td>
+                    <td>FAILURE: "premiumThreshold is not a valid number"</td>
+                </tr>
+                <tr>
+                    <td>13</td>
+                    <td><code>budgetThreshold ≥ premiumThreshold</code></td>
+                    <td><code>budgetThreshold</code>: "500", <code>premiumThreshold</code>: "100"</td>
+                    <td>FAILURE: "budgetThreshold must be less than premiumThreshold"</td>
+                </tr>
+                <tr>
+                    <td>14</td>
+                    <td>Thresholds equal</td>
+                    <td><code>budgetThreshold</code>: "100", <code>premiumThreshold</code>: "100"</td>
+                    <td>FAILURE: "budgetThreshold must be less than premiumThreshold"</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Edge Case Tests</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Scenario</th>
+                    <th>Input</th>
+                    <th>Expected Behavior</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>15</td>
+                    <td>Negative prices in catalog</td>
+                    <td>Product with <code>listPrice</code>: "-50"</td>
+                    <td>Valid number → categorized (Budget if thresholds positive)</td>
+                </tr>
+                <tr>
+                    <td>16</td>
+                    <td>Decimal thresholds</td>
+                    <td><code>budgetThreshold</code>: "99.99", <code>premiumThreshold</code>: "499.99"</td>
+                    <td>Handled correctly (precision=2 in subtractFloats)</td>
+                </tr>
+                <tr>
+                    <td>17</td>
+                    <td>Large product catalog (performance)</td>
+                    <td>10,000+ products</td>
+                    <td>Completes within 60s timeout; all products processed</td>
+                </tr>
+                <tr>
+                    <td>18</td>
+                    <td>Missing optional fields in product</td>
+                    <td>Product missing <code>brand</code> or <code>productDescription</code></td>
+                    <td>Fields remain empty/null; categorization still works</td>
+                </tr>
+                <tr>
+                    <td>19</td>
+                    <td>Extra fields in API response</td>
+                    <td>API returns fields not in schema</td>
+                    <td>Ignored; only mapped fields retained</td>
+                </tr>
+                <tr>
+                    <td>20</td>
+                    <td>Unicode product names</td>
+                    <td>Product with <code>productName</code>: "日本語商品"</td>
+                    <td>UTF-8 encoding preserved through bytesToString</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Dependencies</h2>
+        <ul>
+            <li><code>pub.client:http</code> — HTTP client for REST API call</li>
+            <li><code>pub.string:bytesToString</code> — Convert HTTP response bytes to string</li>
+            <li><code>pub.json:jsonStringToDocument</code> — Parse JSON string to IS document</li>
+            <li><code>pub.string:isNumber</code> — Validate numeric strings</li>
+            <li><code>pub.math:subtractFloats</code> — Float subtraction with precision</li>
+            <li><code>pub.string:indexOf</code> — Detect negative sign in difference results</li>
+            <li><code>pub.list:appendToDocumentList</code> — Build output product list</li>
+        </ul>
+    </section>
+
+    <section class="section">
+        <h2>Integration Notes</h2>
+        <ul>
+            <li>The service expects the catalog API to return a JSON structure with an <code>output</code> array containing product objects with the defined fields.</li>
+            <li>Threshold values are passed as strings to allow flexible input formats but must represent valid decimal numbers.</li>
+            <li>The <code>priceCategory</code> field is added to each product record; ensure downstream consumers expect this field.</li>
+            <li>Service is stateless and thread-safe — suitable for concurrent invocation.</li>
+            <li>No caching is enabled (<code>cacheResults: false</code>); each call hits the catalog API.</li>
+        </ul>
+    </section>
+
+    <div class="footer">
+        Made with IBM Bob
+    </div>
+</body>
+</html>
