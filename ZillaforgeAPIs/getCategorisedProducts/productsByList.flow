@@ -1,6 +1,6 @@
 interface getCategorisedProducts;
 
-service productsbylist (
+service productsByList (
     input {
         String apiUrl;
         String apiKey;
